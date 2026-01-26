@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../services/notification_service.dart';
 import '../services/storage_service.dart';
@@ -18,7 +20,10 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
     InitializeReminders event,
     Emitter<WaterReminderState> emit,
   ) async {
-    emit(state.copyWith(status: WaterReminderStatus.loading));
+    emit(state.copyWith(
+      status: WaterReminderStatus.loading,
+      consoleError: e,
+    ));
 
     try {
       final customReminders = await StorageService.getCustomReminders();
@@ -26,6 +31,8 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
 
       DateTime? nextAutoTime;
       if (isAutoEnabled) {
+        await NotificationService.scheduleAutoReminder();
+
         nextAutoTime = DateTime.now().add(const Duration(hours: 2));
       }
 
@@ -34,11 +41,13 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
         customReminders: customReminders,
         isAutoReminderEnabled: isAutoEnabled,
         nextAutoReminderTime: nextAutoTime,
+        consoleError: e,
       ));
     } catch (e) {
       emit(state.copyWith(
         status: WaterReminderStatus.error,
         errorMessage: e.toString(),
+        consoleError: e,
       ));
     }
   }
@@ -60,11 +69,13 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
       emit(state.copyWith(
         customReminders: updatedReminders,
         status: WaterReminderStatus.success,
+        consoleError: e,
       ));
     } catch (e) {
       emit(state.copyWith(
         status: WaterReminderStatus.error,
         errorMessage: e.toString(),
+        consoleError: e,
       ));
     }
   }
@@ -75,7 +86,7 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
   ) async {
     try {
       // Cancel the notification
-      await NotificationService.cancelNotification(event.reminderId.hashCode);
+      await NotificationService.cancelAutoReminder();
 
       // Remove from local list
       final updatedReminders = state.customReminders
@@ -88,11 +99,13 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
       emit(state.copyWith(
         customReminders: updatedReminders,
         status: WaterReminderStatus.success,
+        consoleError: e,
       ));
     } catch (e) {
       emit(state.copyWith(
         status: WaterReminderStatus.error,
         errorMessage: e.toString(),
+        consoleError: e,
       ));
     }
   }
@@ -102,25 +115,27 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
     Emitter<WaterReminderState> emit,
   ) async {
     try {
-      await StorageService.setAutoReminderEnabled(event.enabled);
-
-      DateTime? nextAutoTime;
       if (event.enabled) {
-        await NotificationService.scheduleRepeatingNotification();
-        nextAutoTime = DateTime.now().add(const Duration(hours: 2));
+        await NotificationService.requestPermissions();
+        await NotificationService.scheduleAutoReminder();
       } else {
-        await NotificationService.cancelNotification(0); // Cancel auto reminder
+        await NotificationService.cancelAutoReminder();
       }
+
+      await StorageService.setAutoReminderEnabled(event.enabled);
 
       emit(state.copyWith(
         isAutoReminderEnabled: event.enabled,
-        nextAutoReminderTime: nextAutoTime,
+        nextAutoReminderTime:
+            event.enabled ? DateTime.now().add(const Duration(hours: 2)) : null,
         status: WaterReminderStatus.success,
+        consoleError: e,
       ));
     } catch (e) {
       emit(state.copyWith(
         status: WaterReminderStatus.error,
         errorMessage: e.toString(),
+        consoleError: e,
       ));
     }
   }
@@ -129,7 +144,10 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
     LoadReminders event,
     Emitter<WaterReminderState> emit,
   ) async {
-    emit(state.copyWith(status: WaterReminderStatus.loading));
+    emit(state.copyWith(
+      status: WaterReminderStatus.loading,
+      consoleError: e,
+    ));
 
     try {
       final customReminders = await StorageService.getCustomReminders();
@@ -137,11 +155,13 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
       emit(state.copyWith(
         status: WaterReminderStatus.success,
         customReminders: customReminders,
+        consoleError: e,
       ));
     } catch (e) {
       emit(state.copyWith(
         status: WaterReminderStatus.error,
         errorMessage: e.toString(),
+        consoleError: e,
       ));
     }
   }
@@ -156,6 +176,7 @@ class WaterReminderBloc extends Bloc<WaterReminderEvent, WaterReminderState> {
       emit(state.copyWith(
         status: WaterReminderStatus.error,
         errorMessage: e.toString(),
+        consoleError: e,
       ));
     }
   }

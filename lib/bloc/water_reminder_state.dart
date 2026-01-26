@@ -24,6 +24,7 @@ class WaterReminderState extends Equatable {
     bool? isAutoReminderEnabled,
     DateTime? nextAutoReminderTime,
     String? errorMessage,
+    required Object consoleError,
   }) {
     return WaterReminderState(
       status: status ?? this.status,

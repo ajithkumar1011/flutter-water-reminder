@@ -1,39 +1,35 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
-import '../models/reminder_model.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:water_reminder_app/models/reminder_model.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
+  static const int autoReminderId = 0;
+
+  /// 🔹 INIT (call once in main)
   static Future<void> initialize() async {
-    // Request notification permissions
-    await Permission.notification.request();
+    tzdata.initializeTimeZones();
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const DarwinInitializationSettings initializationSettingsIOS =
-        DarwinInitializationSettings(
+    const iosInit = DarwinInitializationSettings(
       requestSoundPermission: true,
       requestBadgePermission: true,
       requestAlertPermission: true,
     );
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
+    const settings = InitializationSettings(android: androidInit, iOS: iosInit);
 
-    await _notifications.initialize(initializationSettings);
+    await _notifications.initialize(settings);
 
-    // Create notification channel for Android
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    const channel = AndroidNotificationChannel(
       'water_reminder_channel',
       'Water Reminder Notifications',
-      description: 'Notifications for water drinking reminders',
+      description: 'Water drinking reminders',
       importance: Importance.high,
     );
 
@@ -43,18 +39,29 @@ class NotificationService {
         ?.createNotificationChannel(channel);
   }
 
+  /// 🔹 Permissions
+  static Future<void> requestPermissions() async {
+    await Permission.notification.request();
+    await Permission.scheduleExactAlarm.request();
+  }
+
   static Future<void> scheduleNotification(ReminderModel reminder) async {
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+    final scheduledTime = tz.TZDateTime.from(reminder.dateTime, tz.local);
+
+    // ⛔ Do not schedule past notifications
+    if (scheduledTime.isBefore(tz.TZDateTime.now(tz.local))) {
+      return;
+    }
+
+    const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'water_reminder_channel',
         'Water Reminder Notifications',
-        channelDescription: 'Notifications for water drinking reminders',
+        channelDescription: 'Water drinking reminders',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
       ),
       iOS: DarwinNotificationDetails(
-        sound: 'default.wav',
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
@@ -62,70 +69,64 @@ class NotificationService {
     );
 
     await _notifications.zonedSchedule(
-      reminder.id.hashCode,
+      reminder.id.hashCode, // UNIQUE ID per reminder
       reminder.title,
       reminder.body,
-      tz.TZDateTime.from(reminder.dateTime, tz.local),
-      platformChannelSpecifics,
+      scheduledTime,
+      details,
       androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
-  static Future<void> scheduleRepeatingNotification() async {
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+  /// 🔹 AUTO REMINDER (every 2 hours)
+  static Future<void> scheduleAutoReminder() async {
+    final now = tz.TZDateTime.now(tz.local);
+    final nextTime = now.add(const Duration(hours: 2));
+
+    const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'water_reminder_channel',
         'Water Reminder Notifications',
-        channelDescription: 'Notifications for water drinking reminders',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      ),
-      iOS: DarwinNotificationDetails(
-        sound: 'default.wav',
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
       ),
     );
 
-    await _notifications.periodicallyShow(
-      0,
-      '💧 Time to Drink Water!',
-      'Stay Hydrated and Healthy',
-      RepeatInterval.everyMinute, // For testing - change to custom interval
-      platformChannelSpecifics,
+    await _notifications.zonedSchedule(
+      autoReminderId,
+      '💧 Time to Drink Water',
+      'Stay hydrated and healthy!',
+      nextTime,
+      details,
       androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
-  static Future<void> cancelNotification(int id) async {
-    await _notifications.cancel(id);
+  /// 🔹 Cancel auto reminder
+  static Future<void> cancelAutoReminder() async {
+    await _notifications.cancel(autoReminderId);
   }
 
-  static Future<void> cancelAllNotifications() async {
-    await _notifications.cancelAll();
-  }
-
+  /// 🔹 Test notification
   static Future<void> showInstantNotification() async {
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+    const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'water_reminder_channel',
         'Water Reminder Notifications',
-        channelDescription: 'Notifications for water drinking reminders',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
       ),
     );
 
     await _notifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      '💧 Time to Drink Water!',
-      'Stay Hydrated and Healthy',
-      platformChannelSpecifics,
+      'Test Notification',
+      'Notification is working 🎉',
+      details,
     );
   }
 }
