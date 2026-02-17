@@ -74,36 +74,58 @@ class NotificationService {
       reminder.body,
       scheduledTime,
       details,
-      androidAllowWhileIdle: true,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: null,
     );
   }
 
-  /// 🔹 AUTO REMINDER (every 2 hours)
-  static Future<void> scheduleAutoReminder() async {
-    final now = tz.TZDateTime.now(tz.local);
-    final nextTime = now.add(const Duration(hours: 2));
+  /// 🔹 AUTO REMINDER (every 2 hours, recurring)
+  /// Schedules the next auto reminder at the specified time
+  static Future<void> scheduleAutoReminder({DateTime? scheduledTime}) async {
+    try {
+      final now = tz.TZDateTime.now(tz.local);
+      final nextTime = scheduledTime != null
+          ? tz.TZDateTime.from(scheduledTime, tz.local)
+          : now.add(const Duration(hours: 2));
 
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'water_reminder_channel',
-        'Water Reminder Notifications',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-    );
+      // Don't schedule if the time is in the past
+      if (nextTime.isBefore(now)) {
+        print('Auto reminder time is in the past, skipping schedule');
+        return;
+      }
 
-    await _notifications.zonedSchedule(
-      autoReminderId,
-      '💧 Time to Drink Water',
-      'Stay hydrated and healthy!',
-      nextTime,
-      details,
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'water_reminder_channel',
+          'Water Reminder Notifications',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      );
+
+      await _notifications.zonedSchedule(
+        autoReminderId,
+        '💧 Time to Drink Water',
+        'Stay hydrated and healthy!',
+        nextTime,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: null,
+      );
+    } catch (e) {
+      // Log error but don't throw - allow app to continue
+      print('Error scheduling auto reminder: $e');
+      rethrow;
+    }
   }
 
   /// 🔹 Cancel auto reminder
